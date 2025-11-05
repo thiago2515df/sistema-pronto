@@ -1,0 +1,43 @@
+# Node modules
+node_modules
+.pnpm-store
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+server.log
+
+# Build outputs (será gerado no container)
+dist
+
+# Git
+.git
+.gitignore
+
+# Environment
+.env.local
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+.cache
+
+# Documentation (não necessário em produção)
+*.md
+!README.md
+
+# Test files
+*.test.ts
+*.test.js
+*.spec.ts
+*.spec.js
