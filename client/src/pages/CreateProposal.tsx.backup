@@ -1,0 +1,566 @@
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
+import { useLocation, useRoute } from "wouter";
+import { Loader2, Plus, X } from "lucide-react";
+
+export default function CreateProposal() {
+  const [, setLocation] = useLocation();
+  const [match, params] = useRoute("/propostas/editar/:id");
+  const isEditing = !!match;
+  const proposalId = params?.id ? parseInt(params.id) : null;
+  
+  console.log('DEBUG CreateProposal:', { match, params, isEditing, proposalId });
+  
+  const { data: existingProposal, isLoading: loadingProposal } = trpc.proposals.getById.useQuery(
+    { id: proposalId! },
+    { enabled: isEditing && proposalId !== null }
+  );
+  const [packageName, setPackageName] = useState("");
+  const [clientName, setClientName] = useState("");
+  const [departureDate, setDepartureDate] = useState("");
+  const [returnDate, setReturnDate] = useState("");
+  const [passengers, setPassengers] = useState("");
+  const [coverImage, setCoverImage] = useState<File | null>(null);
+  const [coverImagePreview, setCoverImagePreview] = useState<string>("");
+  const [hotelPhotos, setHotelPhotos] = useState<File[]>([]);
+  const [hotelPhotoPreviews, setHotelPhotoPreviews] = useState<string[]>([]);
+  const [includedItems, setIncludedItems] = useState<string[]>(["Transporte aéreo (ida e volta)", "Hospedagem com café da manhã", "Passeio de barco pelas ilhas"]);
+  const [newItem, setNewItem] = useState("");
+  const [numberOfPassengers, setNumberOfPassengers] = useState("2");
+  const [pricePerPerson, setPricePerPerson] = useState("");
+  const [totalPrice, setTotalPrice] = useState("");
+  const [downPayment, setDownPayment] = useState("");
+  const [installments, setInstallments] = useState("4");
+  const [installmentValue, setInstallmentValue] = useState("");
+
+  // Cálculos automáticos
+  useEffect(() => {
+    // Calcular valor total baseado em valor por pessoa e número de passageiros
+    if (pricePerPerson && numberOfPassengers) {
+      const price = parseFloat(pricePerPerson);
+      const passengers = parseInt(numberOfPassengers);
+      if (!isNaN(price) && !isNaN(passengers)) {
+        setTotalPrice((price * passengers).toFixed(2));
+      }
+    }
+  }, [pricePerPerson, numberOfPassengers]);
+
+  useEffect(() => {
+    // Calcular entrada (10% do valor total)
+    if (totalPrice) {
+      const total = parseFloat(totalPrice);
+      if (!isNaN(total)) {
+        setDownPayment((total * 0.1).toFixed(2));
+      }
+    }
+  }, [totalPrice]);
+
+  useEffect(() => {
+    // Calcular valor das parcelas
+    if (totalPrice && downPayment && installments) {
+      const total = parseFloat(totalPrice);
+      const down = parseFloat(downPayment);
+      const numInstallments = parseInt(installments);
+      
+      if (!isNaN(total) && !isNaN(down) && !isNaN(numInstallments) && numInstallments > 0) {
+        const remaining = total - down;
+        setInstallmentValue((remaining / numInstallments).toFixed(2));
+      }
+    }
+  }, [totalPrice, downPayment, installments]);
+
+  // Carregar dados da proposta existente ao editar
+  useEffect(() => {
+    if (existingProposal && isEditing) {
+      setPackageName(existingProposal.packageName || "");
+      setClientName(existingProposal.clientName);
+      setDepartureDate(existingProposal.departureDate);
+      setReturnDate(existingProposal.returnDate);
+      setPassengers(existingProposal.passengers);
+      setNumberOfPassengers(existingProposal.passengers.split(' ')[0]);
+      setPricePerPerson((existingProposal.pricePerPerson / 100).toString());
+      setTotalPrice((existingProposal.totalPrice / 100).toString());
+      setDownPayment((existingProposal.downPayment / 100).toString());
+      setInstallments(existingProposal.installments.toString());
+      setInstallmentValue((existingProposal.installmentValue / 100).toString());
+      setPhoneNumber(existingProposal.phoneNumber || "");
+      setEmail(existingProposal.email || "");
+      setInstagramUrl(existingProposal.instagramUrl || "");
+      if (existingProposal.coverImageUrl) {
+        setCoverImagePreview(existingProposal.coverImageUrl);
+      }
+      if (existingProposal.includedItems) {
+        setIncludedItems(JSON.parse(existingProposal.includedItems));
+      }
+    }
+  }, [existingProposal, isEditing]);
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [email, setEmail] = useState("");
+  const [instagramUrl, setInstagramUrl] = useState("");
+
+  const uploadImageMutation = trpc.proposals.uploadImage.useMutation();
+  const createProposalMutation = trpc.proposals.create.useMutation();
+  const updateProposalMutation = trpc.proposals.update.useMutation();
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setCoverImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setCoverImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleHotelPhotosChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files) {
+      const newFiles = Array.from(files);
+      setHotelPhotos([...hotelPhotos, ...newFiles]);
+      
+      // Criar previews
+      newFiles.forEach(file => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setHotelPhotoPreviews(prev => [...prev, reader.result as string]);
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+  };
+
+  const removeHotelPhoto = (index: number) => {
+    setHotelPhotos(hotelPhotos.filter((_, i) => i !== index));
+    setHotelPhotoPreviews(hotelPhotoPreviews.filter((_, i) => i !== index));
+  };
+
+  const addIncludedItem = () => {
+    if (newItem.trim()) {
+      setIncludedItems([...includedItems, newItem.trim()]);
+      setNewItem("");
+    }
+  };
+
+  const removeIncludedItem = (index: number) => {
+    setIncludedItems(includedItems.filter((_, i) => i !== index));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    try {
+      let coverImageUrl = "";
+      const hotelPhotoUrls: string[] = [];
+
+      // Upload da imagem de capa se fornecida
+      if (coverImage) {
+        const reader = new FileReader();
+        const base64 = await new Promise<string>((resolve) => {
+          reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+          reader.readAsDataURL(coverImage);
+        });
+        const result = await uploadImageMutation.mutateAsync({
+          fileName: coverImage.name,
+          fileData: base64,
+          mimeType: coverImage.type,
+        });
+        coverImageUrl = result.url;
+      }
+
+      // Upload das fotos do hotel
+      for (const photo of hotelPhotos) {
+        const reader = new FileReader();
+        const base64 = await new Promise<string>((resolve) => {
+          reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+          reader.readAsDataURL(photo);
+        });
+        const result = await uploadImageMutation.mutateAsync({
+          fileName: photo.name,
+          fileData: base64,
+          mimeType: photo.type,
+        });
+        hotelPhotoUrls.push(result.url);
+      }
+
+      // Criar proposta com todas as imagens
+      await createProposalWithData(coverImageUrl, hotelPhotoUrls);
+    } catch (error) {
+      console.error("Erro ao criar proposta:", error);
+      toast.error("Erro ao criar proposta");
+    }
+  };
+
+  const createProposalWithData = async (coverImageUrl: string, hotelPhotoUrls: string[]) => {
+    // Gerar datas das parcelas
+    const installmentDates: string[] = [];
+    const baseDate = new Date();
+    for (let i = 0; i < parseInt(installments); i++) {
+      const date = new Date(baseDate);
+      date.setMonth(date.getMonth() + i + 1);
+      installmentDates.push(date.toLocaleDateString('pt-BR'));
+    }
+
+    const proposalData = {
+      packageName: packageName || undefined,
+      clientName,
+      departureDate,
+      returnDate,
+      passengers,
+      coverImageUrl: coverImageUrl || undefined,
+      hotelPhotos: hotelPhotoUrls.length > 0 ? JSON.stringify(hotelPhotoUrls) : undefined,
+      includedItems,
+      pricePerPerson: Math.round(parseFloat(pricePerPerson) * 100),
+      totalPrice: Math.round(parseFloat(totalPrice) * 100),
+      downPayment: Math.round(parseFloat(downPayment) * 100),
+      installments: parseInt(installments),
+      installmentValue: Math.round(parseFloat(installmentValue) * 100),
+      installmentDates,
+      phoneNumber: phoneNumber || undefined,
+      email: email || undefined,
+      instagramUrl: instagramUrl || undefined,
+    };
+
+    if (isEditing && proposalId) {
+      await updateProposalMutation.mutateAsync({
+        id: proposalId,
+        ...proposalData,
+      });
+      toast.success("Proposta atualizada com sucesso!");
+    } else {
+      await createProposalMutation.mutateAsync(proposalData);
+      toast.success("Proposta criada com sucesso!");
+    }
+
+    setLocation(`/propostas`);
+  };
+
+  const isLoading = uploadImageMutation.isPending || createProposalMutation.isPending || updateProposalMutation.isPending;
+
+  if (loadingProposal) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background p-4">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-3xl font-bold mb-6">
+          {isEditing ? "Editar Proposta" : "Criar Nova Proposta"}
+        </h1>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Nome do Pacote */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Nome do Pacote</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div>
+                <Label htmlFor="packageName">Nome do Pacote de Viagem</Label>
+                <Input
+                  id="packageName"
+                  placeholder="Ex: Pacote Completo Rio de Janeiro"
+                  value={packageName}
+                  onChange={(e) => setPackageName(e.target.value)}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Informações do Cliente */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Informações do Cliente</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="clientName">Nome do Cliente</Label>
+                <Input
+                  id="clientName"
+                  value={clientName}
+                  onChange={(e) => setClientName(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="departureDate">Data de Ida</Label>
+                  <Input
+                    id="departureDate"
+                    type="date"
+                    value={departureDate}
+                    onChange={(e) => setDepartureDate(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="returnDate">Data de Volta</Label>
+                  <Input
+                    id="returnDate"
+                    type="date"
+                    value={returnDate}
+                    onChange={(e) => setReturnDate(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="passengers">Descrição dos Passageiros</Label>
+                <Input
+                  id="passengers"
+                  placeholder="Ex: 2 Adultos"
+                  value={passengers}
+                  onChange={(e) => setPassengers(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="numberOfPassengers">Número de Passageiros</Label>
+                <Input
+                  id="numberOfPassengers"
+                  type="number"
+                  min="1"
+                  value={numberOfPassengers}
+                  onChange={(e) => setNumberOfPassengers(e.target.value)}
+                  required
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Imagem de Capa */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Imagem de Capa</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Input
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+              />
+              {coverImagePreview && (
+                <img
+                  src={coverImagePreview}
+                  alt="Preview"
+                  className="mt-4 w-full h-48 object-cover rounded-lg"
+                />
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Fotos do Hotel */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Fotos do Hotel</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleHotelPhotosChange}
+              />
+              {hotelPhotoPreviews.length > 0 && (
+                <div className="grid grid-cols-3 gap-4 mt-4">
+                  {hotelPhotoPreviews.map((preview, index) => (
+                    <div key={index} className="relative">
+                      <img
+                        src={preview}
+                        alt={`Hotel ${index + 1}`}
+                        className="w-full h-32 object-cover rounded-lg"
+                      />
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="icon"
+                        className="absolute top-2 right-2 h-6 w-6"
+                        onClick={() => removeHotelPhoto(index)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Itens Inclusos */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Itens Inclusos</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                {includedItems.map((item, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <Input value={item} readOnly className="flex-1" />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => removeIncludedItem(index)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Adicionar novo item"
+                  value={newItem}
+                  onChange={(e) => setNewItem(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addIncludedItem())}
+                />
+                <Button type="button" onClick={addIncludedItem}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Adicionar
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Valores */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Valores</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="pricePerPerson">Valor por Pessoa (R$)</Label>
+                  <Input
+                    id="pricePerPerson"
+                    type="number"
+                    step="0.01"
+                    value={pricePerPerson}
+                    onChange={(e) => setPricePerPerson(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="totalPrice">Valor Total (R$) - Calculado Automaticamente</Label>
+                  <Input
+                    id="totalPrice"
+                    type="number"
+                    step="0.01"
+                    value={totalPrice}
+                    readOnly
+                    className="bg-muted"
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Formas de Pagamento */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Formas de Pagamento</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="downPayment">Entrada (R$) - 10% do Total</Label>
+                <Input
+                  id="downPayment"
+                  type="number"
+                  step="0.01"
+                  value={downPayment}
+                  onChange={(e) => setDownPayment(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground mt-1">Calculado automaticamente como 10% do valor total. Você pode editar se necessário.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="installments">Número de Parcelas</Label>
+                  <Input
+                    id="installments"
+                    type="number"
+                    value={installments}
+                    onChange={(e) => setInstallments(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="installmentValue">Valor da Parcela (R$) - Calculado Automaticamente</Label>
+                  <Input
+                    id="installmentValue"
+                    type="number"
+                    step="0.01"
+                    value={installmentValue}
+                    readOnly
+                    className="bg-muted"
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Contatos */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Informações de Contato</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="phoneNumber">Telefone</Label>
+                <Input
+                  id="phoneNumber"
+                  placeholder="(11) 99999-9999"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="contato@agencia.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="instagramUrl">Instagram URL</Label>
+                <Input
+                  id="instagramUrl"
+                  placeholder="https://instagram.com/agencia"
+                  value={instagramUrl}
+                  onChange={(e) => setInstagramUrl(e.target.value)}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Botões de Ação */}
+          <div className="flex gap-4">
+            <Button type="submit" disabled={isLoading} className="flex-1">
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isEditing ? "Salvar Edição" : "Criar Proposta"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setLocation("/propostas")}
+            >
+              Cancelar
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}

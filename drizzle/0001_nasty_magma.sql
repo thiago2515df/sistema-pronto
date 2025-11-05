@@ -1,0 +1,22 @@
+CREATE TABLE `proposals` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`clientName` varchar(255) NOT NULL,
+	`departureDate` varchar(20) NOT NULL,
+	`returnDate` varchar(20) NOT NULL,
+	`passengers` varchar(100) NOT NULL,
+	`coverImageUrl` text,
+	`includedItems` text NOT NULL,
+	`pricePerPerson` int NOT NULL,
+	`totalPrice` int NOT NULL,
+	`downPayment` int NOT NULL,
+	`installments` int NOT NULL,
+	`installmentValue` int NOT NULL,
+	`installmentDates` text NOT NULL,
+	`phoneNumber` varchar(20),
+	`email` varchar(320),
+	`instagramUrl` varchar(500),
+	`createdBy` int NOT NULL,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `proposals_id` PRIMARY KEY(`id`)
+);
